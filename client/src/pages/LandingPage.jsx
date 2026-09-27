@@ -14,14 +14,15 @@ import {
   FileText
 } from 'lucide-react';
 import Logo from '../components/Logo';
+import { apiUrl, safeJson } from '../api/config';
 
 export default function LandingPage({ onRunTests }) {
   const navigate = useNavigate();
 
   const handleGenerateSample = async () => {
     try {
-      const res = await fetch('/api/tests/generate-sample', { method: 'POST' });
-      const data = await res.json();
+      const res = await fetch(apiUrl('/api/tests/generate-sample'), { method: 'POST' });
+      const data = await safeJson(res);
       if (data.success && data.document) {
         navigate(`/processing/${data.document.id}`);
       }

@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import SourceBadge from '../components/SourceBadge';
 import Logo from '../components/Logo';
+import { apiUrl, safeJson } from '../api/config';
 
 export default function DashboardPage() {
   const { id } = useParams();
@@ -32,16 +33,15 @@ export default function DashboardPage() {
   useEffect(() => {
     const fetchAnalysis = async () => {
       try {
-        const res = await fetch(`/api/documents/${id}/analysis`);
-        if (!res.ok) {
-          const errData = await res.json();
-          if (errData.status === 'processing' || errData.status === 'uploaded') {
+        const res = await fetch(apiUrl(`/api/documents/${id}/analysis`));
+        const json = await safeJson(res);
+        if (!res.ok || json?.error) {
+          if (json?.status === 'processing' || json?.status === 'uploaded') {
             navigate(`/processing/${id}`);
             return;
           }
-          throw new Error(errData.error || 'Failed to fetch analysis');
+          throw new Error(json?.error || `Failed to fetch analysis (${res.status} ${res.statusText})`);
         }
-        const json = await res.json();
         setData(json);
       } catch (err) {
         setError(err.message);

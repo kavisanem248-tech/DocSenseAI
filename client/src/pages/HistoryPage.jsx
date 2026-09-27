@@ -11,6 +11,7 @@ import {
   RefreshCw 
 } from 'lucide-react';
 import Logo from '../components/Logo';
+import { apiUrl, safeJson } from '../api/config';
 
 export default function HistoryPage() {
   const navigate = useNavigate();
@@ -20,9 +21,9 @@ export default function HistoryPage() {
   const fetchDocuments = async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/documents');
+      const res = await fetch(apiUrl('/api/documents'));
       if (res.ok) {
-        const json = await res.json();
+        const json = await safeJson(res);
         setDocuments(json.documents || []);
       }
     } catch (e) {
@@ -41,7 +42,7 @@ export default function HistoryPage() {
     if (!confirm('Are you sure you want to delete this document and all its analysis?')) return;
 
     try {
-      await fetch(`/api/documents/${id}`, { method: 'DELETE' });
+      await fetch(apiUrl(`/api/documents/${id}`), { method: 'DELETE' });
       setDocuments(prev => prev.filter(d => d.id !== id));
     } catch (e) {
       alert('Delete failed: ' + e.message);
@@ -50,8 +51,8 @@ export default function HistoryPage() {
 
   const handleGenerateSample = async () => {
     try {
-      const res = await fetch('/api/tests/generate-sample', { method: 'POST' });
-      const data = await res.json();
+      const res = await fetch(apiUrl('/api/tests/generate-sample'), { method: 'POST' });
+      const data = await safeJson(res);
       if (data.success && data.document) {
         navigate(`/processing/${data.document.id}`);
       }

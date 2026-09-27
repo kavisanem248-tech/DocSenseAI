@@ -8,6 +8,7 @@ import {
   Sparkles 
 } from 'lucide-react';
 import Logo from '../components/Logo';
+import { apiUrl, safeJson } from '../api/config';
 
 const PIPELINE_STEPS = [
   { id: 'upload', label: 'File Ingestion & Magic Validation', threshold: 10 },
@@ -34,16 +35,16 @@ export default function ProcessingPage() {
 
     const startAndMonitor = async () => {
       try {
-        const initialRes = await fetch(`/api/documents/${id}`);
-        if (!initialRes.ok) {
-          throw new Error('Document not found or removed.');
+        const initialRes = await fetch(apiUrl(`/api/documents/${id}`));
+        const initialData = await safeJson(initialRes);
+        if (!initialRes.ok || initialData?.error) {
+          throw new Error(initialData?.error || 'Document not found or removed.');
         }
-        const initialData = await initialRes.json();
         if (!isMounted) return;
         setDoc(initialData.document);
 
         if (initialData.document.status === 'uploaded') {
-          await fetch(`/api/documents/${id}/analyze`, { method: 'POST' });
+          await fetch(apiUrl(`/api/documents/${id}/analyze`), { method: 'POST' });
         } else if (initialData.document.status === 'completed') {
           navigate(`/dashboard/${id}`);
           return;
@@ -51,12 +52,12 @@ export default function ProcessingPage() {
 
         intervalId = setInterval(async () => {
           try {
-            const pollRes = await fetch(`/api/documents/${id}`);
+            const pollRes = await fetch(apiUrl(`/api/documents/${id}`));
             if (!pollRes.ok) return;
-            const pollData = await pollRes.json();
-            const currentDoc = pollData.document;
+            const pollData = await safeJson(pollRes);
+            const currentDoc = pollData?.document;
 
-            if (!isMounted) return;
+            if (!isMounted || !currentDoc) return;
             setDoc(currentDoc);
             setProgress(currentDoc.progress || 10);
             setStage(currentDoc.stage || 'Processing document...');
@@ -93,7 +94,7 @@ export default function ProcessingPage() {
     setProgress(15);
     setStage('Retrying analysis...');
     try {
-      await fetch(`/api/documents/${id}/analyze`, { method: 'POST' });
+      await fetch(apiUrl(`/api/documents/${id}/analyze`), { method: 'POST' });
     } catch (e) {
       setError(e.message);
     }

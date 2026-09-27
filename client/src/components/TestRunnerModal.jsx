@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { CheckCircle2, XCircle, Loader2, Play, X, ShieldCheck } from 'lucide-react';
 import Logo from './Logo';
+import { apiUrl, safeJson } from '../api/config';
 
 export default function TestRunnerModal({ isOpen, onClose }) {
   const [running, setRunning] = useState(false);
@@ -14,8 +15,8 @@ export default function TestRunnerModal({ isOpen, onClose }) {
     setError(null);
     setResults(null);
     try {
-      const res = await fetch('/api/tests/run', { method: 'POST' });
-      const data = await res.json();
+      const res = await fetch(apiUrl('/api/tests/run'), { method: 'POST' });
+      const data = await safeJson(res);
       setResults(data);
     } catch (e) {
       setError(e.message);

@@ -8,6 +8,7 @@ import {
   ArrowLeft
 } from 'lucide-react';
 import Logo from '../components/Logo';
+import { apiUrl, safeJson } from '../api/config';
 
 export default function DocumentViewerPage() {
   const { id } = useParams();
@@ -39,11 +40,11 @@ export default function DocumentViewerPage() {
   useEffect(() => {
     const fetchDoc = async () => {
       try {
-        const res = await fetch(`/api/documents/${id}`);
-        if (!res.ok) throw new Error('Document not found');
-        const json = await res.json();
+        const res = await fetch(apiUrl(`/api/documents/${id}`));
+        const json = await safeJson(res);
+        if (!res.ok) throw new Error(json.error || 'Document not found');
         setDoc(json.document);
-        setTotalPages(json.document.pageCount || json.pagesCount || 1);
+        setTotalPages(json.document?.pageCount || json.pagesCount || 1);
       } catch (e) {
         console.error('Error fetching document metadata:', e);
       }
@@ -55,9 +56,9 @@ export default function DocumentViewerPage() {
     const fetchPage = async () => {
       setLoadingPage(true);
       try {
-        const res = await fetch(`/api/documents/${id}/pages/${currentPage}`);
-        if (!res.ok) throw new Error('Page not found');
-        const json = await res.json();
+        const res = await fetch(apiUrl(`/api/documents/${id}/pages/${currentPage}`));
+        const json = await safeJson(res);
+        if (!res.ok) throw new Error(json.error || 'Page not found');
         setPageData(json.page);
       } catch (e) {
         setPageData(null);
@@ -181,7 +182,7 @@ export default function DocumentViewerPage() {
           </div>
 
           <a
-            href={`/api/documents/${id}/file`}
+            href={apiUrl(`/api/documents/${id}/file`)}
             download
             className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors border border-slate-300"
             title="Download original file"
@@ -220,7 +221,7 @@ export default function DocumentViewerPage() {
       {viewMode === 'native' ? (
         <div className="bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-sm h-[75vh]">
           <iframe
-            src={`/api/documents/${id}/file#page=${currentPage}`}
+            src={`${apiUrl(`/api/documents/${id}/file`)}#page=${currentPage}`}
             className="w-full h-full border-0 bg-white"
             title="Native Document Embed"
           />

@@ -9,6 +9,7 @@ import {
   ExternalLink
 } from 'lucide-react';
 import Logo from '../components/Logo';
+import { apiUrl, safeJson } from '../api/config';
 
 export default function SettingsPage({ onRunTests }) {
   const [provider, setProvider] = useState('gemini');
@@ -25,10 +26,10 @@ export default function SettingsPage({ onRunTests }) {
   useEffect(() => {
     const fetchSettings = async () => {
       try {
-        const res = await fetch('/api/settings');
+        const res = await fetch(apiUrl('/api/settings'));
         if (res.ok) {
-          const json = await res.json();
-          const s = json.settings;
+          const json = await safeJson(res);
+          const s = json.settings || {};
           setProvider(s.provider || 'gemini');
           setGeminiApiKey(s.geminiApiKey || '');
           setOpenaiApiKey(s.openaiApiKey || '');
@@ -49,7 +50,7 @@ export default function SettingsPage({ onRunTests }) {
     setTestResult(null);
 
     try {
-      const res = await fetch('/api/settings', {
+      const res = await fetch(apiUrl('/api/settings'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -64,6 +65,9 @@ export default function SettingsPage({ onRunTests }) {
       if (res.ok) {
         setSaveSuccess(true);
         setTimeout(() => setSaveSuccess(false), 3000);
+      } else {
+        const errJson = await safeJson(res);
+        alert('Save failed: ' + (errJson.error || 'Server error'));
       }
     } catch (e) {
       alert('Save failed: ' + e.message);
@@ -77,8 +81,8 @@ export default function SettingsPage({ onRunTests }) {
     setTestResult(null);
 
     try {
-      const res = await fetch('/api/settings/test', { method: 'POST' });
-      const json = await res.json();
+      const res = await fetch(apiUrl('/api/settings/test'), { method: 'POST' });
+      const json = await safeJson(res);
       setTestResult(json);
     } catch (e) {
       setTestResult({ success: false, error: e.message });

@@ -11,6 +11,7 @@ import {
   ShieldCheck
 } from 'lucide-react';
 import Logo from '../components/Logo';
+import { apiUrl, safeJson } from '../api/config';
 
 const ALLOWED_EXTENSIONS = ['.pdf', '.doc', '.docx', '.png', '.jpg', '.jpeg'];
 const MAX_SIZE_BYTES = 50 * 1024 * 1024; // 50MB
@@ -95,15 +96,15 @@ export default function UploadPage() {
     formData.append('document', selectedFile);
 
     try {
-      const res = await fetch('/api/documents/upload', {
+      const res = await fetch(apiUrl('/api/documents/upload'), {
         method: 'POST',
         body: formData
       });
 
-      const data = await res.json();
+      const data = await safeJson(res);
 
-      if (!res.ok) {
-        throw new Error(data.error || 'Upload failed');
+      if (!res.ok || data.error) {
+        throw new Error(data.error || `Upload failed (${res.status} ${res.statusText})`);
       }
 
       setUploadSuccess(data.document);
@@ -119,9 +120,9 @@ export default function UploadPage() {
   const handleGenerateSample = async () => {
     setUploading(true);
     try {
-      const res = await fetch('/api/tests/generate-sample', { method: 'POST' });
-      const data = await res.json();
-      if (data.success && data.document) {
+      const res = await fetch(apiUrl('/api/tests/generate-sample'), { method: 'POST' });
+      const data = await safeJson(res);
+      if (data && data.success && data.document) {
         navigate(`/processing/${data.document.id}`);
       } else {
         throw new Error(data.error || 'Failed to generate test document');

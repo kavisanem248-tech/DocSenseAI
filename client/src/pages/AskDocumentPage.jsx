@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import SourceBadge from '../components/SourceBadge';
 import Logo from '../components/Logo';
+import { apiUrl, safeJson } from '../api/config';
 
 const SAMPLE_QUESTIONS = [
   'What are the critical deadlines and milestones?',
@@ -36,17 +37,17 @@ export default function AskDocumentPage() {
     const init = async () => {
       try {
         const [docRes, chatRes] = await Promise.all([
-          fetch(`/api/documents/${id}`),
-          fetch(`/api/documents/${id}/chat-history`)
+          fetch(apiUrl(`/api/documents/${id}`)),
+          fetch(apiUrl(`/api/documents/${id}/chat-history`))
         ]);
 
         if (docRes.ok) {
-          const docData = await docRes.json();
+          const docData = await safeJson(docRes);
           setDoc(docData.document);
         }
 
         if (chatRes.ok) {
-          const chatData = await chatRes.json();
+          const chatData = await safeJson(chatRes);
           const mapped = (chatData.history || []).flatMap(item => [
             { id: `${item.id}_q`, sender: 'user', text: item.question },
             { 
@@ -82,13 +83,13 @@ export default function AskDocumentPage() {
     setLoading(true);
 
     try {
-      const res = await fetch(`/api/documents/${id}/ask`, {
+      const res = await fetch(apiUrl(`/api/documents/${id}/ask`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ question: query })
       });
 
-      const data = await res.json();
+      const data = await safeJson(res);
       if (!res.ok) {
         throw new Error(data.error || 'Failed to get answer');
       }

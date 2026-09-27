@@ -13,6 +13,7 @@ import {
   ShieldCheck
 } from 'lucide-react';
 import Logo from './Logo';
+import { apiUrl, safeJson } from '../api/config';
 
 export default function Navbar({ onRunTests }) {
   const location = useLocation();
@@ -57,8 +58,8 @@ export default function Navbar({ onRunTests }) {
 
   const handleGenerateSample = async () => {
     try {
-      const res = await fetch('/api/tests/generate-sample', { method: 'POST' });
-      const data = await res.json();
+      const res = await fetch(apiUrl('/api/tests/generate-sample'), { method: 'POST' });
+      const data = await safeJson(res);
       if (data.success && data.document) {
         navigate(`/processing/${data.document.id}`);
       }
