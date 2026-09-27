@@ -1,0 +1,24 @@
+{
+  "name": "ai-report-analysis",
+  "version": "1.0.0",
+  "description": "Production-style AI Report Analyzer with grounded RAG, deadlines, obligations, financial validation, and source traceability",
+  "main": "server/src/index.js",
+  "scripts": {
+    "start": "node server/src/index.js",
+    "server": "node server/src/index.js",
+    "client": "npm --prefix client run dev",
+    "test": "node server/tests/runner.js",
+    "build": "npm --prefix client run build"
+  },
+  "keywords": [
+    "ai",
+    "document-analyzer",
+    "rag",
+    "report-analysis",
+    "traceability",
+    "ocr"
+  ],
+  "author": "",
+  "license": "ISC",
+  "type": "module"
+}
