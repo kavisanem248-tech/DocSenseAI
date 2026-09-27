@@ -5,6 +5,7 @@ import fs from 'fs';
 import { v4 as uuidv4 } from 'uuid';
 import { config } from '../config.js';
 import { db } from '../db.js';
+import { requireAuth } from '../middleware/auth.js';
 import { validateUploadedFile } from '../validators/fileValidator.js';
 import { extractDocument } from '../extractors/documentExtractor.js';
 import { checkDocumentQuality } from '../services/qualityChecker.js';
@@ -14,6 +15,9 @@ import { analyzeDocument } from '../services/analysisEngine.js';
 import { askDocument } from '../services/chatService.js';
 
 const router = express.Router();
+
+// Enforce authentication on all document operations
+router.use(requireAuth);
 
 // Multer storage configuration
 const storage = multer.diskStorage({
@@ -31,7 +35,7 @@ const upload = multer({
   limits: { fileSize: config.maxFileSize }
 });
 
-// 1. Upload Document
+// 1. Upload Document (Belongs to req.user)
 router.post('/upload', upload.single('document'), async (req, res) => {
   try {
     if (!req.file) {
@@ -44,7 +48,6 @@ router.post('/upload', upload.single('document'), async (req, res) => {
     // Validate file
     const validation = await validateUploadedFile(filePath, originalName);
     if (!validation.valid) {
-      // Remove invalid file from disk
       if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
       return res.status(400).json({ error: validation.error });
     }
@@ -52,6 +55,7 @@ router.post('/upload', upload.single('document'), async (req, res) => {
     const docId = uuidv4();
     const docRecord = {
       id: docId,
+      userId: req.user.id,
       originalName,
       storedName: req.file.filename,
       mimeType: req.file.mimetype,
@@ -79,34 +83,34 @@ router.post('/upload', upload.single('document'), async (req, res) => {
   }
 });
 
-// 2. List All Documents
+// 2. List User Documents (Strictly filtered by req.user.id)
 router.get('/', (req, res) => {
   try {
-    const docs = db.getDocuments();
+    const docs = db.getDocuments(req.user.id);
     res.json({ documents: docs });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// 3. Get Single Document Metadata
+// 3. Get Single Document Metadata (Strictly verifies req.user.id)
 router.get('/:id', (req, res) => {
   try {
-    const doc = db.getDocumentById(req.params.id);
+    const doc = db.getDocumentById(req.params.id, req.user.id);
     if (!doc) {
       return res.status(404).json({ error: 'Document not found.' });
     }
-    const pages = db.getPages(doc.id);
+    const pages = db.getPages(doc.id, req.user.id);
     res.json({ document: doc, pagesCount: pages.length });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// 4. Run Complete Analysis Pipeline
+// 4. Run Complete Analysis Pipeline (Strictly verifies req.user.id)
 router.post('/:id/analyze', async (req, res) => {
   const docId = req.params.id;
-  const doc = db.getDocumentById(docId);
+  const doc = db.getDocumentById(docId, req.user.id);
 
   if (!doc) {
     return res.status(404).json({ error: 'Document not found.' });
@@ -122,7 +126,7 @@ router.post('/:id/analyze', async (req, res) => {
     status: 'processing',
     progress: 15,
     stage: 'Reading document and extracting text'
-  });
+  }, req.user.id);
 
   // Respond immediately with processing state
   res.json({
@@ -135,11 +139,11 @@ router.post('/:id/analyze', async (req, res) => {
   (async () => {
     try {
       // Step 1: Extraction
-      db.updateDocument(docId, { progress: 25, stage: 'Extracting pages, text, and tables' });
+      db.updateDocument(docId, { progress: 25, stage: 'Extracting pages, text, and tables' }, req.user.id);
       const extracted = await extractDocument(filePath, doc.originalName);
 
       // Step 2: Quality Check
-      db.updateDocument(docId, { progress: 40, stage: 'Running automated text quality check' });
+      db.updateDocument(docId, { progress: 40, stage: 'Running automated text quality check' }, req.user.id);
       const quality = checkDocumentQuality(extracted);
 
       if (quality.status === 'failed') {
@@ -148,7 +152,7 @@ router.post('/:id/analyze', async (req, res) => {
           progress: 100,
           stage: 'Text extraction failed',
           error: quality.message
-        });
+        }, req.user.id);
         return;
       }
 
@@ -165,16 +169,16 @@ router.post('/:id/analyze', async (req, res) => {
       db.setPages(docId, pageRecords);
 
       // Step 4: Chunking
-      db.updateDocument(docId, { progress: 55, stage: 'Dividing document into traceable chunks' });
+      db.updateDocument(docId, { progress: 55, stage: 'Dividing document into traceable chunks' }, req.user.id);
       const chunks = chunkDocument(docId, extracted.pages);
       db.setChunks(docId, chunks);
 
       // Step 5: Vector Index
-      db.updateDocument(docId, { progress: 70, stage: 'Building semantic RAG vector index' });
+      db.updateDocument(docId, { progress: 70, stage: 'Building semantic RAG vector index' }, req.user.id);
       vectorStore.buildIndex(docId, chunks);
 
       // Step 6: AI Analysis & Extraction
-      db.updateDocument(docId, { progress: 85, stage: 'Analyzing deadlines, obligations, financials, and cross-checks' });
+      db.updateDocument(docId, { progress: 85, stage: 'Analyzing deadlines, obligations, financials, and cross-checks' }, req.user.id);
       const analysisResult = await analyzeDocument(doc, extracted.pages, chunks);
 
       // Step 7: Store Analysis & Complete
@@ -191,7 +195,7 @@ router.post('/:id/analyze', async (req, res) => {
         pageCount: extracted.pageCount,
         analyzedAt: new Date().toISOString(),
         qualityCheck: quality
-      });
+      }, req.user.id);
     } catch (pipelineErr) {
       console.error(`Pipeline error for doc ${docId}:`, pipelineErr);
       db.updateDocument(docId, {
@@ -199,21 +203,21 @@ router.post('/:id/analyze', async (req, res) => {
         progress: 100,
         stage: 'Analysis encountered an error',
         error: pipelineErr.message
-      });
+      }, req.user.id);
     }
   })();
 });
 
-// 5. Get Analysis Results
+// 5. Get Analysis Results (Strictly verifies req.user.id)
 router.get('/:id/analysis', (req, res) => {
   try {
     const docId = req.params.id;
-    const doc = db.getDocumentById(docId);
+    const doc = db.getDocumentById(docId, req.user.id);
     if (!doc) {
       return res.status(404).json({ error: 'Document not found.' });
     }
 
-    const analysis = db.getAnalysis(docId);
+    const analysis = db.getAnalysis(docId, req.user.id);
     if (!analysis) {
       return res.status(404).json({
         error: 'No analysis results found yet for this document.',
@@ -232,12 +236,17 @@ router.get('/:id/analysis', (req, res) => {
   }
 });
 
-// 6. Get Mapped Sources
+// 6. Get Mapped Sources (Strictly verifies req.user.id)
 router.get('/:id/sources', (req, res) => {
   try {
     const docId = req.params.id;
-    const chunks = db.getChunks(docId);
-    const analysis = db.getAnalysis(docId);
+    const doc = db.getDocumentById(docId, req.user.id);
+    if (!doc) {
+      return res.status(404).json({ error: 'Document not found.' });
+    }
+
+    const chunks = db.getChunks(docId, req.user.id);
+    const analysis = db.getAnalysis(docId, req.user.id);
 
     const sources = {
       chunks: chunks.map(c => ({
@@ -258,7 +267,7 @@ router.get('/:id/sources', (req, res) => {
   }
 });
 
-// 7. Ask Your Document (RAG Q&A)
+// 7. Ask Your Document (RAG Q&A - Strictly isolated to user's document)
 router.post('/:id/ask', async (req, res) => {
   try {
     const docId = req.params.id;
@@ -268,20 +277,20 @@ router.post('/:id/ask', async (req, res) => {
       return res.status(400).json({ error: 'Question is required.' });
     }
 
-    const doc = db.getDocumentById(docId);
+    const doc = db.getDocumentById(docId, req.user.id);
     if (!doc) {
       return res.status(404).json({ error: 'Document not found.' });
     }
 
-    // Ensure chunks are in vector store
-    let chunks = db.getChunks(docId);
+    // Ensure chunks are in vector store strictly for this document
+    let chunks = db.getChunks(docId, req.user.id);
     if (chunks.length === 0) {
       return res.status(400).json({ error: 'Document must be analyzed before asking questions.' });
     }
 
     vectorStore.buildIndex(docId, chunks);
 
-    const history = db.getChatHistory(docId);
+    const history = db.getChatHistory(docId, req.user.id);
     const result = await askDocument(doc, question, history);
 
     const chatEntry = {
@@ -308,22 +317,31 @@ router.post('/:id/ask', async (req, res) => {
   }
 });
 
-// 8. Get Chat History
+// 8. Get Chat History (Strictly verifies req.user.id)
 router.get('/:id/chat-history', (req, res) => {
   try {
-    const history = db.getChatHistory(req.params.id);
+    const doc = db.getDocumentById(req.params.id, req.user.id);
+    if (!doc) {
+      return res.status(404).json({ error: 'Document not found.' });
+    }
+    const history = db.getChatHistory(req.params.id, req.user.id);
     res.json({ history });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// 9. Get Page Content for Document Viewer
+// 9. Get Page Content for Document Viewer (Strictly verifies req.user.id)
 router.get('/:id/pages/:page', (req, res) => {
   try {
     const docId = req.params.id;
+    const doc = db.getDocumentById(docId, req.user.id);
+    if (!doc) {
+      return res.status(404).json({ error: 'Document not found.' });
+    }
+
     const pageNum = parseInt(req.params.page, 10);
-    const page = db.getPage(docId, pageNum);
+    const page = db.getPage(docId, pageNum, req.user.id);
 
     if (!page) {
       return res.status(404).json({ error: `Page ${pageNum} not found for this document.` });
@@ -335,10 +353,10 @@ router.get('/:id/pages/:page', (req, res) => {
   }
 });
 
-// 10. Serve Original Document File
+// 10. Serve Original Document File (Strictly verifies req.user.id)
 router.get('/:id/file', (req, res) => {
   try {
-    const doc = db.getDocumentById(req.params.id);
+    const doc = db.getDocumentById(req.params.id, req.user.id);
     if (!doc) {
       return res.status(404).json({ error: 'Document not found.' });
     }
@@ -355,19 +373,22 @@ router.get('/:id/file', (req, res) => {
   }
 });
 
-// 11. Delete Document
+// 11. Delete Document (Strictly verifies req.user.id and purges all assets)
 router.delete('/:id', (req, res) => {
   try {
     const docId = req.params.id;
-    const doc = db.getDocumentById(docId);
-    if (doc) {
-      const filePath = path.join(config.uploadDir, doc.storedName);
-      if (fs.existsSync(filePath)) {
-        try { fs.unlinkSync(filePath); } catch (e) {}
-      }
+    const doc = db.getDocumentById(docId, req.user.id);
+    if (!doc) {
+      return res.status(404).json({ error: 'Document not found.' });
     }
-    db.deleteDocument(docId);
-    res.json({ success: true, message: 'Document and analysis deleted.' });
+
+    const filePath = path.join(config.uploadDir, doc.storedName);
+    if (fs.existsSync(filePath)) {
+      try { fs.unlinkSync(filePath); } catch (e) {}
+    }
+
+    db.deleteDocument(docId, req.user.id);
+    res.json({ success: true, message: 'Document and all associated analysis deleted successfully.' });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

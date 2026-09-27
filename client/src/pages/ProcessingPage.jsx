@@ -8,7 +8,7 @@ import {
   Sparkles 
 } from 'lucide-react';
 import Logo from '../components/Logo';
-import { apiUrl, safeJson } from '../api/config';
+import { apiUrl, safeJson, authHeaders } from '../api/config';
 
 const PIPELINE_STEPS = [
   { id: 'upload', label: 'File Ingestion & Magic Validation', threshold: 10 },
@@ -35,7 +35,9 @@ export default function ProcessingPage() {
 
     const startAndMonitor = async () => {
       try {
-        const initialRes = await fetch(apiUrl(`/api/documents/${id}`));
+        const initialRes = await fetch(apiUrl(`/api/documents/${id}`), {
+          headers: authHeaders()
+        });
         const initialData = await safeJson(initialRes);
         if (!initialRes.ok || initialData?.error) {
           throw new Error(initialData?.error || 'Document not found or removed.');
@@ -44,7 +46,10 @@ export default function ProcessingPage() {
         setDoc(initialData.document);
 
         if (initialData.document.status === 'uploaded') {
-          await fetch(apiUrl(`/api/documents/${id}/analyze`), { method: 'POST' });
+          await fetch(apiUrl(`/api/documents/${id}/analyze`), { 
+            method: 'POST',
+            headers: authHeaders()
+          });
         } else if (initialData.document.status === 'completed') {
           navigate(`/dashboard/${id}`);
           return;
@@ -52,7 +57,9 @@ export default function ProcessingPage() {
 
         intervalId = setInterval(async () => {
           try {
-            const pollRes = await fetch(apiUrl(`/api/documents/${id}`));
+            const pollRes = await fetch(apiUrl(`/api/documents/${id}`), {
+              headers: authHeaders()
+            });
             if (!pollRes.ok) return;
             const pollData = await safeJson(pollRes);
             const currentDoc = pollData?.document;
@@ -94,7 +101,10 @@ export default function ProcessingPage() {
     setProgress(15);
     setStage('Retrying analysis...');
     try {
-      await fetch(apiUrl(`/api/documents/${id}/analyze`), { method: 'POST' });
+      await fetch(apiUrl(`/api/documents/${id}/analyze`), { 
+        method: 'POST',
+        headers: authHeaders()
+      });
     } catch (e) {
       setError(e.message);
     }

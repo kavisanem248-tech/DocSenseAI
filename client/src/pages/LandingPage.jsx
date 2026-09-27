@@ -14,14 +14,19 @@ import {
   FileText
 } from 'lucide-react';
 import Logo from '../components/Logo';
-import { apiUrl, safeJson } from '../api/config';
+import { useAuth } from '../context/AuthContext';
+import { apiUrl, safeJson, authHeaders } from '../api/config';
 
 export default function LandingPage({ onRunTests }) {
   const navigate = useNavigate();
+  const { isAuthenticated } = useAuth();
 
   const handleGenerateSample = async () => {
     try {
-      const res = await fetch(apiUrl('/api/tests/generate-sample'), { method: 'POST' });
+      const res = await fetch(apiUrl('/api/tests/generate-sample'), { 
+        method: 'POST',
+        headers: authHeaders()
+      });
       const data = await safeJson(res);
       if (data.success && data.document) {
         navigate(`/processing/${data.document.id}`);
@@ -39,7 +44,7 @@ export default function LandingPage({ onRunTests }) {
         
         {/* Prominent Official Logo */}
         <div className="flex justify-center mb-2">
-          <Logo size="xl" linkTo="" />
+          <Logo size="xl" linkTo={isAuthenticated ? '/dashboard' : '/'} />
         </div>
 
         {/* Tagline Badge */}
@@ -61,19 +66,35 @@ export default function LandingPage({ onRunTests }) {
         {/* CTAs */}
         <div className="flex flex-wrap items-center justify-center gap-3.5 pt-4">
           <button
-            onClick={() => navigate('/upload')}
+            onClick={() => navigate(isAuthenticated ? '/upload' : '/signup')}
             className="flex items-center gap-2 px-6 py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold text-sm rounded-xl shadow-md shadow-blue-500/20 transition-all hover:scale-[1.02] cursor-pointer"
           >
-            <span>Analyze Your Document</span>
+            <span>{isAuthenticated ? 'Analyze Your Document' : 'Get Started Free'}</span>
             <ArrowRight className="w-4 h-4" />
           </button>
 
+          {isAuthenticated ? (
+            <button
+              onClick={() => navigate('/dashboard')}
+              className="flex items-center gap-2 px-6 py-3.5 bg-white hover:bg-slate-50 text-slate-800 border border-slate-300 font-semibold text-sm rounded-xl shadow-xs transition-all cursor-pointer"
+            >
+              <span>View Your Dashboard</span>
+            </button>
+          ) : (
+            <button
+              onClick={() => navigate('/login')}
+              className="flex items-center gap-2 px-6 py-3.5 bg-white hover:bg-slate-50 text-slate-800 border border-slate-300 font-semibold text-sm rounded-xl shadow-xs transition-all cursor-pointer"
+            >
+              <span>Sign In to Account</span>
+            </button>
+          )}
+
           <button
             onClick={handleGenerateSample}
-            className="flex items-center gap-2 px-6 py-3.5 bg-white hover:bg-slate-50 text-slate-800 border border-slate-300 font-semibold text-sm rounded-xl shadow-xs transition-all cursor-pointer"
+            className="flex items-center gap-2 px-5 py-3.5 bg-slate-100 hover:bg-slate-200 text-blue-700 font-semibold text-sm rounded-xl transition-all cursor-pointer"
           >
             <Sparkles className="w-4 h-4 text-blue-600" />
-            <span>Try Sample Report (3 Pages)</span>
+            <span>Try Sample Report</span>
           </button>
         </div>
 

@@ -6,6 +6,7 @@ import { db } from './db.js';
 import documentsRouter from './routes/documents.js';
 import settingsRouter from './routes/settings.js';
 import testsRouter from './routes/tests.js';
+import authRouter from './routes/auth.js';
 
 const app = express();
 
@@ -35,6 +36,7 @@ app.get('/api/health', (req, res) => {
 });
 
 // API Routes
+app.use('/api/auth', authRouter);
 app.use('/api/documents', documentsRouter);
 app.use('/api/settings', settingsRouter);
 app.use('/api/tests', testsRouter);

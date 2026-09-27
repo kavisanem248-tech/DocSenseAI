@@ -11,7 +11,7 @@ import {
 } from 'lucide-react';
 import SourceBadge from '../components/SourceBadge';
 import Logo from '../components/Logo';
-import { apiUrl, safeJson } from '../api/config';
+import { apiUrl, safeJson, authHeaders } from '../api/config';
 
 const SAMPLE_QUESTIONS = [
   'What are the critical deadlines and milestones?',
@@ -37,8 +37,8 @@ export default function AskDocumentPage() {
     const init = async () => {
       try {
         const [docRes, chatRes] = await Promise.all([
-          fetch(apiUrl(`/api/documents/${id}`)),
-          fetch(apiUrl(`/api/documents/${id}/chat-history`))
+          fetch(apiUrl(`/api/documents/${id}`), { headers: authHeaders() }),
+          fetch(apiUrl(`/api/documents/${id}/chat-history`), { headers: authHeaders() })
         ]);
 
         if (docRes.ok) {
@@ -85,7 +85,7 @@ export default function AskDocumentPage() {
     try {
       const res = await fetch(apiUrl(`/api/documents/${id}/ask`), {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: authHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({ question: query })
       });
 

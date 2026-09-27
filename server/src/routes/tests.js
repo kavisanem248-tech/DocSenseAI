@@ -13,11 +13,12 @@ import { vectorStore } from '../services/vectorStore.js';
 import { analyzeDocument } from '../services/analysisEngine.js';
 import { askDocument } from '../services/chatService.js';
 import { performOcr } from '../extractors/ocrExtractor.js';
+import { optionalAuth } from '../middleware/auth.js';
 
 const router = express.Router();
 
 // Generate Sample Test Document and register it in DB
-router.post('/generate-sample', async (req, res) => {
+router.post('/generate-sample', optionalAuth, async (req, res) => {
   try {
     const filename = `sample_report_${Date.now()}.pdf`;
     const targetPath = path.join(config.uploadDir, filename);
@@ -28,6 +29,7 @@ router.post('/generate-sample', async (req, res) => {
     const docId = uuidv4();
     const docRecord = {
       id: docId,
+      userId: req.user ? req.user.id : 'demo-user',
       originalName: 'Sample_Procurement_Agreement.pdf',
       storedName: filename,
       mimeType: 'application/pdf',

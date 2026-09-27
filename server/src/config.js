@@ -33,5 +33,6 @@ export const config = {
     openaiApiKey: process.env.OPENAI_API_KEY || '',
     openaiBaseUrl: process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1',
     model: process.env.AI_MODEL || 'gemini-1.5-flash',
-  }
+  },
+  jwtSecret: process.env.JWT_SECRET || 'docsenseai-super-secret-jwt-key-2026-secure'
 };

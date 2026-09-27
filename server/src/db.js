@@ -1,10 +1,12 @@
 import fs from 'fs';
+import { v4 as uuidv4 } from 'uuid';
 import { config } from './config.js';
 
 class Database {
   constructor() {
     this.filePath = config.dbPath;
     this.data = {
+      users: [],
       documents: [],
       pages: [],
       chunks: [],
@@ -25,7 +27,18 @@ class Database {
     try {
       if (fs.existsSync(this.filePath)) {
         const raw = fs.readFileSync(this.filePath, 'utf-8');
-        this.data = { ...this.data, ...JSON.parse(raw) };
+        const parsed = JSON.parse(raw);
+        this.data = {
+          ...this.data,
+          ...parsed,
+          users: parsed.users || [],
+          documents: parsed.documents || [],
+          pages: parsed.pages || [],
+          chunks: parsed.chunks || [],
+          analyses: parsed.analyses || {},
+          chats: parsed.chats || [],
+          settings: { ...this.data.settings, ...(parsed.settings || {}) }
+        };
       } else {
         this.save();
       }
@@ -45,13 +58,79 @@ class Database {
     }
   }
 
-  // Documents
-  getDocuments() {
-    return this.data.documents.sort((a, b) => new Date(b.uploadedAt) - new Date(a.uploadedAt));
+  // ================= USERS =================
+  createUser({ name, email, passwordHash }) {
+    const existing = this.getUserByEmail(email);
+    if (existing) {
+      throw new Error('An account with this email address already exists.');
+    }
+
+    const user = {
+      id: uuidv4(),
+      name: name.trim(),
+      email: email.trim().toLowerCase(),
+      passwordHash,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+
+    this.data.users.push(user);
+    this.save();
+
+    // Return safe user object without password hash
+    const { passwordHash: _, ...safeUser } = user;
+    return safeUser;
   }
 
-  getDocumentById(id) {
-    return this.data.documents.find(d => d.id === id) || null;
+  getUserById(id) {
+    if (!id) return null;
+    const user = this.data.users.find(u => u.id === id);
+    if (!user) return null;
+    const { passwordHash: _, ...safeUser } = user;
+    return safeUser;
+  }
+
+  getUserWithHashById(id) {
+    if (!id) return null;
+    return this.data.users.find(u => u.id === id) || null;
+  }
+
+  getUserByEmail(email) {
+    if (!email) return null;
+    const normalized = email.trim().toLowerCase();
+    return this.data.users.find(u => u.email.toLowerCase() === normalized) || null;
+  }
+
+  updateUser(id, updates) {
+    const user = this.data.users.find(u => u.id === id);
+    if (!user) return null;
+
+    if (updates.name) user.name = updates.name.trim();
+    if (updates.passwordHash) user.passwordHash = updates.passwordHash;
+    user.updatedAt = new Date().toISOString();
+
+    this.save();
+    const { passwordHash: _, ...safeUser } = user;
+    return safeUser;
+  }
+
+  // ================= DOCUMENTS (MULTI-TENANT) =================
+  getDocuments(userId = null) {
+    let docs = this.data.documents;
+    if (userId) {
+      docs = docs.filter(d => d.userId === userId);
+    }
+    return [...docs].sort((a, b) => new Date(b.uploadedAt) - new Date(a.uploadedAt));
+  }
+
+  getDocumentById(id, userId = null) {
+    if (!id) return null;
+    const doc = this.data.documents.find(d => d.id === id);
+    if (!doc) return null;
+    if (userId && doc.userId && doc.userId !== userId) {
+      return null; // Enforce strict ownership: does not leak existence
+    }
+    return doc;
   }
 
   addDocument(doc) {
@@ -61,15 +140,18 @@ class Database {
     return doc;
   }
 
-  updateDocument(id, updates) {
-    const doc = this.getDocumentById(id);
+  updateDocument(id, updates, userId = null) {
+    const doc = this.getDocumentById(id, userId);
     if (!doc) return null;
     Object.assign(doc, updates);
     this.save();
     return doc;
   }
 
-  deleteDocument(id) {
+  deleteDocument(id, userId = null) {
+    const doc = this.getDocumentById(id, userId);
+    if (!doc) return false;
+
     this.data.documents = this.data.documents.filter(d => d.id !== id);
     this.data.pages = this.data.pages.filter(p => p.docId !== id);
     this.data.chunks = this.data.chunks.filter(c => c.docId !== id);
@@ -79,33 +161,45 @@ class Database {
     return true;
   }
 
-  // Pages
+  // ================= PAGES =================
   setPages(docId, pages) {
     this.data.pages = this.data.pages.filter(p => p.docId !== docId);
     this.data.pages.push(...pages);
     this.save();
   }
 
-  getPages(docId) {
+  getPages(docId, userId = null) {
+    if (userId) {
+      const doc = this.getDocumentById(docId, userId);
+      if (!doc) return [];
+    }
     return this.data.pages.filter(p => p.docId === docId).sort((a, b) => a.pageNumber - b.pageNumber);
   }
 
-  getPage(docId, pageNumber) {
+  getPage(docId, pageNumber, userId = null) {
+    if (userId) {
+      const doc = this.getDocumentById(docId, userId);
+      if (!doc) return null;
+    }
     return this.data.pages.find(p => p.docId === docId && p.pageNumber === parseInt(pageNumber, 10)) || null;
   }
 
-  // Chunks
+  // ================= CHUNKS =================
   setChunks(docId, chunks) {
     this.data.chunks = this.data.chunks.filter(c => c.docId !== docId);
     this.data.chunks.push(...chunks);
     this.save();
   }
 
-  getChunks(docId) {
+  getChunks(docId, userId = null) {
+    if (userId) {
+      const doc = this.getDocumentById(docId, userId);
+      if (!doc) return [];
+    }
     return this.data.chunks.filter(c => c.docId === docId).sort((a, b) => a.chunkIndex - b.chunkIndex);
   }
 
-  // Analyses
+  // ================= ANALYSES =================
   setAnalysis(docId, analysis) {
     this.data.analyses[docId] = {
       ...analysis,
@@ -115,22 +209,30 @@ class Database {
     return this.data.analyses[docId];
   }
 
-  getAnalysis(docId) {
+  getAnalysis(docId, userId = null) {
+    if (userId) {
+      const doc = this.getDocumentById(docId, userId);
+      if (!doc) return null;
+    }
     return this.data.analyses[docId] || null;
   }
 
-  // Chat
+  // ================= CHAT =================
   addChatMessage(chatEntry) {
     this.data.chats.push(chatEntry);
     this.save();
     return chatEntry;
   }
 
-  getChatHistory(docId) {
+  getChatHistory(docId, userId = null) {
+    if (userId) {
+      const doc = this.getDocumentById(docId, userId);
+      if (!doc) return [];
+    }
     return this.data.chats.filter(c => c.docId === docId).sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
   }
 
-  // Settings
+  // ================= SETTINGS =================
   getSettings() {
     return {
       provider: this.data.settings.provider || 'gemini',

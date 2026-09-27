@@ -8,7 +8,7 @@ import {
   ArrowLeft
 } from 'lucide-react';
 import Logo from '../components/Logo';
-import { apiUrl, safeJson } from '../api/config';
+import { apiUrl, safeJson, authHeaders, authUrl } from '../api/config';
 
 export default function DocumentViewerPage() {
   const { id } = useParams();
@@ -40,7 +40,9 @@ export default function DocumentViewerPage() {
   useEffect(() => {
     const fetchDoc = async () => {
       try {
-        const res = await fetch(apiUrl(`/api/documents/${id}`));
+        const res = await fetch(apiUrl(`/api/documents/${id}`), {
+          headers: authHeaders()
+        });
         const json = await safeJson(res);
         if (!res.ok) throw new Error(json.error || 'Document not found');
         setDoc(json.document);
@@ -56,7 +58,9 @@ export default function DocumentViewerPage() {
     const fetchPage = async () => {
       setLoadingPage(true);
       try {
-        const res = await fetch(apiUrl(`/api/documents/${id}/pages/${currentPage}`));
+        const res = await fetch(apiUrl(`/api/documents/${id}/pages/${currentPage}`), {
+          headers: authHeaders()
+        });
         const json = await safeJson(res);
         if (!res.ok) throw new Error(json.error || 'Page not found');
         setPageData(json.page);
@@ -182,7 +186,7 @@ export default function DocumentViewerPage() {
           </div>
 
           <a
-            href={apiUrl(`/api/documents/${id}/file`)}
+            href={authUrl(`/api/documents/${id}/file`)}
             download
             className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors border border-slate-300"
             title="Download original file"
@@ -221,7 +225,7 @@ export default function DocumentViewerPage() {
       {viewMode === 'native' ? (
         <div className="bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-sm h-[75vh]">
           <iframe
-            src={`${apiUrl(`/api/documents/${id}/file`)}#page=${currentPage}`}
+            src={`${authUrl(`/api/documents/${id}/file`)}#page=${currentPage}`}
             className="w-full h-full border-0 bg-white"
             title="Native Document Embed"
           />

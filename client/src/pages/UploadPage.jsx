@@ -11,7 +11,7 @@ import {
   ShieldCheck
 } from 'lucide-react';
 import Logo from '../components/Logo';
-import { apiUrl, safeJson } from '../api/config';
+import { apiUrl, safeJson, authHeaders } from '../api/config';
 
 const ALLOWED_EXTENSIONS = ['.pdf', '.doc', '.docx', '.png', '.jpg', '.jpeg'];
 const MAX_SIZE_BYTES = 50 * 1024 * 1024; // 50MB
@@ -98,6 +98,7 @@ export default function UploadPage() {
     try {
       const res = await fetch(apiUrl('/api/documents/upload'), {
         method: 'POST',
+        headers: authHeaders(),
         body: formData
       });
 
@@ -120,7 +121,10 @@ export default function UploadPage() {
   const handleGenerateSample = async () => {
     setUploading(true);
     try {
-      const res = await fetch(apiUrl('/api/tests/generate-sample'), { method: 'POST' });
+      const res = await fetch(apiUrl('/api/tests/generate-sample'), { 
+        method: 'POST',
+        headers: authHeaders()
+      });
       const data = await safeJson(res);
       if (data && data.success && data.document) {
         navigate(`/processing/${data.document.id}`);
